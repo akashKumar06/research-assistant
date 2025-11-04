@@ -46,7 +46,7 @@
 
 ---
 
-## 3. 🔄 **Intended Workflow**
+## 🔄 **Intended Workflow**
 
 ### **Workflow A: Paper Search & Indexing**
 

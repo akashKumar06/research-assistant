@@ -3,9 +3,22 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@theme {
-  --color-hover-background: #353739;
-  --color-text-cl: #c4c7c5;
+/* @import url("https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:ital,wght@0,400..900;1,400..900&display=swap");
+
+.schibsted-grotesk-font {
+  font-family: "Schibsted Grotesk", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 400;
+  font-style: normal;
+} */
+
+@layer utilities {
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @theme inline {
