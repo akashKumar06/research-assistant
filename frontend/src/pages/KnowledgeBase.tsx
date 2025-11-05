@@ -108,7 +108,9 @@ const KnowledgeBase = () => {
     <div className="p-8 space-y-8">
       {/* Header */}
       <section>
-        <h1 className="text-3xl font-bold text-white mb-2">Knowledge Base</h1>
+        <h1 className="text-3xl font-bold text-white mb-2">
+          Knowledge Base [DEMO DATA FOR NOW WILL BE IMPLEMENTED]
+        </h1>
         <p className="text-slate-400">
           Manage and monitor indexed research papers
         </p>
