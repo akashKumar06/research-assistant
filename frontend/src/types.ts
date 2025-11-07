@@ -16,7 +16,16 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
-  sources?: SourceReference[];
+  metadata?: {
+    papers?: Array<{
+      title: string;
+      authors?: string[];
+      year?: string;
+      url?: string;
+      pdf_url?: string;
+      abstract?: string;
+    }>;
+  };
 }
 
 export interface SourceReference {

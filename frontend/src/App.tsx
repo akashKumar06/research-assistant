@@ -10,11 +10,12 @@ import {
 } from "react-router";
 import { Routes } from "react-router";
 import Dashboard from "./pages/Dashboard";
-import SearchPapers from "./pages/SearchPaper";
+import SearchPaper from "./pages/SearchPaper";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import { Toaster } from "sonner";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Header from "./components/Header";
+import { ChatProvider } from "./context/ChatContext";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -44,24 +45,26 @@ export default function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <div className={`flex h-screen ${isDarkMode ? "dark" : ""}`}>
-          <Sidebar />
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <Header />
-            <main className="flex-1 overflow-auto bg-zinc-900">
-              <Routes>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/search" element={<SearchPapers />} />
-                <Route path="/chat" element={<Chat />} />
-                <Route path="/knowledge-base" element={<KnowledgeBase />} />
-                <Route path="/settings" element={<Settings />} />
-              </Routes>
-            </main>
+      <ChatProvider> {/* ⭐ Move ChatProvider outside BrowserRouter */}
+        <BrowserRouter>
+          <div className={`flex h-screen ${isDarkMode ? "dark" : ""}`}>
+            <Sidebar />
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <Header />
+              <main className="flex-1 overflow-auto bg-zinc-900">
+                <Routes>
+                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/search" element={<SearchPaper />} />
+                  <Route path="/chat" element={<Chat />} />
+                  <Route path="/knowledge-base" element={<KnowledgeBase />} />
+                  <Route path="/settings" element={<Settings />} />
+                </Routes>
+              </main>
+            </div>
           </div>
-        </div>
-        <Toaster position="top-right" />
-      </BrowserRouter>
+          <Toaster position="top-right" />
+        </BrowserRouter>
+      </ChatProvider>
     </QueryClientProvider>
   );
 }

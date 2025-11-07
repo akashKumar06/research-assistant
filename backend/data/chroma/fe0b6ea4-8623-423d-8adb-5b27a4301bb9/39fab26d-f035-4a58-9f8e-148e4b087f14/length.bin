@@ -1,0 +1,15 @@
+Top 10 Least-Selling SKUs by Value:
+Select SKU_NAME, sum(TOTAL_VALUE_SOLD) as total_value_sold
+From sales_data
+Group by SKU_NAME
+Order by total_value_sold Asc
+LIMIT 10;
+ 2. Customer Analysis
+Top 10 Customers by Total Value Purchased:
+Select CUSTOMER_NAME, sum(TOTAL_VALUE_SOLD) as total_purchase_value
+From sales_data
+Group by CUSTOMER_NAME
+Order by total_purchase_value desc
+LIMIT 10;
+sql
+sqles_data
