@@ -1,73 +1,126 @@
-from langchain_chroma import Chroma
-from langchain_huggingface import HuggingFaceEmbeddings
-import uuid
 import os
-import shutil
+import uuid
+from typing import List
+from pinecone import Pinecone, ServerlessSpec
+from langchain_core.documents import Document
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 class VectorStore:
-    def __init__(self, session_id: str = None):
-        """Initialize vector store with optional session ID for isolation"""
-        self.embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2"
+    """
+    Pinecone vector storage for each PDF.
+    
+    pdf_id = namespace inside the Pinecone index.
+    """
+
+    def __init__(self, pdf_id: str):
+        self.pdf_id = pdf_id
+        self.api_key = os.getenv("PINECONE_API_KEY")
+        self.index_name = os.getenv("PINECONE_INDEX_NAME", "research-assistant")
+
+        if not self.api_key:
+            raise ValueError("PINECONE_API_KEY not found in environment variables")
+
+        self.pc = Pinecone(api_key=self.api_key)
+
+        # Create index if not exists
+        if self.index_name not in self.pc.list_indexes().names():
+            print(f"[VectorStore] Creating Pinecone index: {self.index_name}")
+            self.pc.create_index(
+                name=self.index_name,
+                dimension=1024,            # matches embedding model dimension
+                metric="cosine",
+                spec=ServerlessSpec(cloud="aws", region="us-east-1")
+            )
+
+        self.index = self.pc.Index(self.index_name)
+        print(f"[VectorStore] Initialized index '{self.index_name}' for PDF namespace '{self.pdf_id}'")
+
+    # ----------------------------------------------------------------------
+    #                           ADD EMBEDDINGS
+    # ----------------------------------------------------------------------
+
+    def add_embeddings(self, chunks: List[Document]):
+        """
+        Store embeddings in Pinecone for the given PDF.
+        """
+
+        print(f"[VectorStore] Adding {len(chunks)} chunks to namespace: {self.pdf_id}")
+
+        from src.services.embeddings import embed_text
+
+        vectors = []
+
+        for chunk in chunks:
+            chunk_id = str(uuid.uuid4())
+
+            # 🔥 Generate embedding for each PDF chunk
+            embedding = embed_text(chunk.page_content)
+
+            vectors.append({
+                "id": chunk_id,
+                "values": embedding,
+                "metadata": {
+                    "text": chunk.page_content,
+                    "source": self.pdf_id
+                }
+            })
+
+        self.index.upsert(vectors=vectors, namespace=self.pdf_id)
+
+        print(f"[VectorStore] Successfully stored embeddings in Pinecone")
+
+    # ----------------------------------------------------------------------
+    #                           SEARCH
+    # ----------------------------------------------------------------------
+
+    def search(self, query: str, top_k: int = 5):
+        """
+        Search Pinecone for the closest chunks related to the query.
+        Embedding is generated inside the LangChain/LLM pipeline.
+        """
+
+        from src.services.embeddings import embed_text  # lazy import
+
+        print(f"[VectorStore] Searching embeddings for PDF: {self.pdf_id}")
+
+        query_embedding = embed_text(query)
+
+        response = self.index.query(
+            vector=query_embedding,
+            top_k=top_k,
+            include_metadata=True,
+            namespace=self.pdf_id
         )
-        
-        # Create unique collection per session
-        self.session_id = session_id or str(uuid.uuid4())
-        self.persist_directory = f"./data/chroma/{self.session_id}"
-        self.collection_name = f"pdf_collection_{self.session_id}"
-        self.vector_store = None
-        
-        print(f"[VectorStore] Initialized for session: {self.session_id}")
-        print(f"[VectorStore] Persist directory: {self.persist_directory}")
 
-    def create_store(self, chunks):
-        """Create a new vector store from document chunks"""
-        print(f"[VectorStore] Creating store with {len(chunks)} chunks")
-        
-        # Clear existing store for this session
-        self.clear_store()
-        
-        # Create new vector store
-        self.vector_store = Chroma.from_documents(
-            documents=chunks,
-            embedding=self.embeddings,
-            collection_name=self.collection_name,
-            persist_directory=self.persist_directory
-        )
-        
-        print(f"[VectorStore] Store created successfully")
-        print(f"[VectorStore] Collection count: {self.vector_store._collection.count()}")
-        
-        return self.vector_store
+        matches = response.get("matches", [])
+        print(f"[VectorStore] Retrieved {len(matches)} results")
 
-    def get_retriever(self, k: int = 3):
-        """Get retriever for searching documents"""
-        print(f"[VectorStore] Getting retriever for session: {self.session_id}")
-        
-        # Load existing vector store if not already loaded
-        if self.vector_store is None:
-            if os.path.exists(self.persist_directory):
-                print(f"[VectorStore] Loading existing store from: {self.persist_directory}")
-                self.vector_store = Chroma(
-                    collection_name=self.collection_name,
-                    embedding_function=self.embeddings,
-                    persist_directory=self.persist_directory
-                )
-                print(f"[VectorStore] Loaded. Collection count: {self.vector_store._collection.count()}")
-            else:
-                print(f"[VectorStore] WARNING: No vector store found at {self.persist_directory}")
-                raise ValueError(f"No vector store found for session {self.session_id}. Please upload a PDF first.")
-        
-        return self.vector_store.as_retriever(search_kwargs={"k": k})
+        # Convert to LangChain-style chunk objects
+        documents = []
+        for m in matches:
+            metadata = m["metadata"]
+            doc = Document(
+                page_content=metadata.get("text", ""),
+                metadata=metadata
+            )
+            documents.append(doc)
 
-    def clear_store(self):
-        """Clear the vector store for this session"""
-        if os.path.exists(self.persist_directory):
-            print(f"[VectorStore] Clearing existing store at: {self.persist_directory}")
-            shutil.rmtree(self.persist_directory)
+        return documents
 
-    def delete_store(self):
-        """Delete the vector store when session ends"""
-        print(f"[VectorStore] Deleting store for session: {self.session_id}")
-        self.clear_store()
+    # ----------------------------------------------------------------------
+    #                           DELETE VECTORS
+    # ----------------------------------------------------------------------
 
+    def delete_pdf_vectors(self):
+        """
+        Delete all embeddings belonging to this PDF.
+        """
+
+        print(f"[VectorStore] Deleting all vectors for namespace: {self.pdf_id}")
+
+        self.index.delete(delete_all=True, namespace=self.pdf_id)
+
+        print(f"[VectorStore] Deleted vector namespace for PDF: {self.pdf_id}")

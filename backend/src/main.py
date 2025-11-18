@@ -1,8 +1,16 @@
 from fastapi import FastAPI
-from src.routes import chat_router, research_chat_router
+from src.config.db import Base, engine
+from src.routes.user_routes import router as user_router
+from src.routes.chat_routes import router as chat_router
+from src.routes.research_routes import router as research_router
+
 
 from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI(title="Research Paper Assistant")
+
+
+# Create all tables in Neon
+Base.metadata.create_all(bind=engine)
 
 app.add_middleware(
     CORSMiddleware,
@@ -11,8 +19,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(research_chat_router.router, prefix="/api/research-chat", tags=["Research"])
-app.include_router(chat_router.router, prefix="/api/chat", tags=["Chat"])
+app.include_router(user_router)
+app.include_router(chat_router)
+app.include_router(research_router)
 
 @app.get("/")
 def root():
