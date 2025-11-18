@@ -1,288 +1,142 @@
-"use client";
-
-import { useRef, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import { Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Upload, X, FileText, Search, Loader, CheckCircle, Trash2 } from "lucide-react";
-import type { ChatMessage } from "@/types";
-import { motion } from "framer-motion";
-import { useUploadFile } from "@/hooks/mutations/useUploadFile";
-import { useChat } from "@/hooks/mutations/useChat";
-import { ChatWindow } from "@/components/ChatWindow";
-import { useChatContext } from "@/context/ChatContext";
+import ThemeToggle from "@/components/ThemeToggle";
 
-const FilePlaceholder = ({
-  file,
-  index,
-  onRemoveFile,
-}: {
-  file: File;
-  index: number;
-  onRemoveFile: (index: number) => void;
-}) => {
-  const { uploadFile, isPending, isSuccess, sessionData } = useUploadFile();
-  
-  useEffect(() => {
-    const formData = new FormData();
-    formData.append("file", file);
-    console.log("📄 Uploading file:", file.name);
-    uploadFile(formData);
-  }, [file, uploadFile]);
+interface Message {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+}
 
-  useEffect(() => {
-    if (isSuccess && sessionData) {
-      console.log("✅ File uploaded successfully!");
-      console.log("📋 Session ID:", sessionData.session_id);
-    }
-  }, [isSuccess, sessionData]);
+export default function Chat() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  return (
-    <div
-      key={index}
-      className="flex items-center justify-between bg-zinc-100 dark:bg-zinc-800 p-2 rounded-md"
-    >
-      <div className="flex items-center gap-2">
-        <FileText size={20} className="text-zinc-600 dark:text-zinc-300" />
-        <span className="text-sm text-zinc-700 dark:text-zinc-100 truncate w-40">
-          {file.name}
-        </span>
-      </div>
-      <Button
-        size="icon"
-        variant="ghost"
-        onClick={() => onRemoveFile(index)}
-        className="text-red-500 hover:text-red-600"
-      >
-        {isPending && <Loader className="animate-spin" size={16} />}
-        {isSuccess && <CheckCircle size={16} className="text-green-500" />}
-        {!isPending && !isSuccess && <X size={16} />}
-      </Button>
-    </div>
-  );
-};
+  const bottomRef = useRef<HTMLDivElement | null>(null);
 
-const Chat = () => {
-  // ⭐ Get ALL context states including loading state
-  const { 
-    messages, 
-    setMessages, 
-    isChatActive, 
-    setIsChatActive, 
-    clearChat,
-    isAIResponding,
-    setIsAIResponding
-  } = useChatContext();
-  
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [query, setQuery] = useState<string>("");
-
-  const { getAIResponse, isPending } = useChat();
-
-  const handleRemoveFile = (index: number) => {
-    setUploadedFiles((files) => files.filter((_, i) => i !== index));
+  const scrollToBottom = () => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const handleSendMessage = async () => {
-    if (!query.trim()) return;
+  useEffect(scrollToBottom, [messages]);
 
-    const sessionId = localStorage.getItem("pdf_session_id");
-    if (!sessionId) {
-      console.error("❌ No session ID - please upload a PDF first");
-      alert("Please upload a PDF document first!");
-      return;
-    }
+  // ====== HANDLE STREAMING MESSAGE ======
+  const sendMessage = async () => {
+    if (!input.trim()) return;
 
-    const userMessage: ChatMessage = {
-      id: `msg_${Date.now()}`,
+    const userMessage: Message = {
+      id: crypto.randomUUID(),
       role: "user",
-      content: query,
-      timestamp: new Date(),
+      content: input,
     };
 
-    setIsChatActive(true);
     setMessages((prev) => [...prev, userMessage]);
-    
-    // ⭐ Clear input immediately after adding user message
-    setQuery("");
+    setLoading(true);
 
-    const aiMessageId = `msg_${Date.now()}_ai`;
+    const assistantMessage: Message = {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content: "",
+    };
+    setMessages((prev) => [...prev, assistantMessage]);
+    setInput("");
 
-    // ⭐ Add empty AI message
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: aiMessageId,
-        role: "assistant",
-        content: "",
-        timestamp: new Date(),
-      },
-    ]);
+    const eventSource = new EventSource(
+      `http://localhost:8000/research/chat/stream?query=${encodeURIComponent(
+        input
+      )}`
+    );
 
-    setIsAIResponding(true); // ⭐ Start loading
+    eventSource.onmessage = (event) => {
+      const chunk = event.data;
 
-    try {
-      const body = { query: userMessage.content }; // ⭐ Use saved query content
-      getAIResponse(body, {
-        onError: (err) => {
-          console.error("❌ Error getting AI response:", err);
-          setIsAIResponding(false);
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === aiMessageId
-                ? { 
-                    ...msg, 
-                    content: "Sorry, there was an error processing your request. Please try again." 
-                  }
-                : msg
-            )
-          );
-        },
-        onSuccess: async (reader) => {
-          if (!reader) {
-            setIsAIResponding(false);
-            return;
-          }
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMessage.id
+            ? { ...msg, content: msg.content + chunk }
+            : msg
+        )
+      );
+    };
 
-          const decoder = new TextDecoder();
-          let isFirstChunk = true;
+    eventSource.onerror = () => {
+      eventSource.close();
+      setLoading(false);
+    };
 
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-              setIsAIResponding(false);
-              break;
-            }
-            
-            const chunk = decoder.decode(value);
-            
-            if (isFirstChunk) {
-              setIsAIResponding(false);
-              isFirstChunk = false;
-            }
-            
-            setMessages((prev) =>
-              prev.map((msg) =>
-                msg.id === aiMessageId
-                  ? { ...msg, content: msg.content + chunk }
-                  : msg
-              )
-            );
-          }
-        },
-      });
-    } catch (error) {
-      console.error("Failed to send message:", error);
-      setIsAIResponding(false);
-    }
+    eventSource.onopen = () => setLoading(true);
+
+    eventSource.addEventListener("done", () => {
+      eventSource.close();
+      setLoading(false);
+    });
   };
 
   return (
-    <div className="h-full flex-1 flex flex-col items-center justify-center relative">
-      {/* ⭐ Clear Chat Button */}
-      {isChatActive && messages.length > 0 && (
-        <Button
-          onClick={clearChat}
-          variant="ghost"
-          size="sm"
-          className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-200 z-10"
-        >
-          <Trash2 size={16} className="mr-2" />
-          Clear Chat
-        </Button>
-      )}
+    <div className="relative h-[calc(100vh-4rem)] flex flex-col px-6 py-4">
+      <ThemeToggle />
 
-      {!isChatActive && (
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="text-center mb-8"
-        >
-          <div className="text-6xl mb-4">💬</div>
-          <h1 className="text-3xl font-bold text-white mb-2">Start a Conversation</h1>
-          <p className="text-zinc-400 mb-6">
-            Ask questions about your indexed papers or start by uploading PDFs
-          </p>
-        </motion.div>
-      )}
+      {/* Header */}
+      <div className="pb-4 border-b border-zinc-700/40 flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+          Chat
+        </h1>
+      </div>
 
-      <ChatWindow isChatActive={isChatActive} messages={messages} />
-
-      <motion.div
-        initial={{ opacity: 0, y: 0 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3, duration: 0.6 }}
-        className={`w-full max-w-2xl flex flex-col gap-2 bg-zinc-800/40 backdrop-blur-xl p-2 rounded-2xl border border-zinc-700 shadow-lg transition-transform ${
-          isChatActive ? "absolute bottom-10" : ""
-        }`}
-      >
-        {uploadedFiles.length > 0 && (
-          <div className="grid grid-cols-1 gap-2">
-            {uploadedFiles.map((file, index) => (
-              <FilePlaceholder
-                key={index}
-                file={file}
-                index={index}
-                onRemoveFile={handleRemoveFile}
-              />
-            ))}
-          </div>
-        )}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center bg-stone-100/80 p-2 rounded-md">
-            <label htmlFor="file-input" className="cursor-pointer">
-              <Upload size={16} />
-            </label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              id="file-input"
-              multiple
-              accept=".pdf"
-              onChange={(e) =>
-                setUploadedFiles(() =>
-                  e.target.files ? Array.from(e.target.files) : []
-                )
-              }
-              hidden
-            />
-          </div>
-
-          <Input
-            type="text"
-            placeholder="Ask questions about your PDF..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="bg-transparent text-slate-200 placeholder:text-zinc-500 border-none focus:ring-0 focus-visible:ring-0"
-            onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-          />
-          <Button
-            onClick={handleSendMessage}
-            variant="secondary"
-            disabled={isPending || isAIResponding}
-            className="dark:bg-zinc-900 hover:dark:bg-zinc-800 text-white rounded-xl px-4 py-2"
+      {/* CHAT MESSAGES */}
+      <div className="flex-1 overflow-y-auto py-6 space-y-6">
+        {messages.map((msg) => (
+          <motion.div
+            key={msg.id}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`flex ${
+              msg.role === "user" ? "justify-end" : "justify-start"
+            }`}
           >
-            <Search className="w-4 h-4 mr-1" />
-            Ask
+            <div
+              className={`max-w-[75%] px-5 py-3 rounded-2xl text-sm leading-relaxed shadow-md
+                ${
+                  msg.role === "user"
+                    ? "bg-cyan-600 text-white rounded-br-none"
+                    : "bg-white/60 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-700 backdrop-blur-md rounded-bl-none"
+                }
+              `}
+            >
+              {msg.content || (
+                <Loader2 className="animate-spin w-4 h-4 text-cyan-400" />
+              )}
+            </div>
+          </motion.div>
+        ))}
+
+        <div ref={bottomRef} />
+      </div>
+
+      {/* INPUT BAR */}
+      <div className="border-t border-zinc-700/40 pt-4">
+        <div className="flex gap-3 items-center">
+          <Input
+            placeholder="Ask something..."
+            className="flex-1 bg-white/60 dark:bg-zinc-900/60 border-zinc-300 dark:border-zinc-700 backdrop-blur-lg"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+          />
+
+          <Button
+            onClick={sendMessage}
+            disabled={loading}
+            className="px-5 py-3 rounded-xl shadow-lg bg-cyan-600 hover:bg-cyan-700"
+          >
+            <Send size={18} />
           </Button>
         </div>
-      </motion.div>
-
-      {!isChatActive && (
-        <p className="mt-6 text-sm text-zinc-500 text-center max-w-2xl">
-          Try queries like{" "}
-          <span className="text-slate-300">
-            "What are the main advantages of attention mechanisms?"
-          </span>{" "}
-          or{" "}
-          <span className="text-slate-300">
-            "Explain the concept of embeddings in NLP"
-          </span>
-        </p>
-      )}
+      </div>
     </div>
   );
-};
-
-export default Chat;
+}

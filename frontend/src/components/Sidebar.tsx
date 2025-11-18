@@ -1,56 +1,41 @@
-import { Link, useLocation } from "react-router";
-import {
-  Home,
-  Search,
-  MessageSquare,
-  BookOpen,
-  Settings,
-  Brain,
-} from "lucide-react";
+import { Loader, Plus } from "lucide-react";
+import Session from "./Session";
 
-const Sidebar = () => {
-  const location = useLocation();
-
-  const menuItems = [
-    { path: "/", icon: Home, label: "Dashboard" },
-    { path: "/search", icon: Search, label: "Search Papers" },
-    { path: "/chat", icon: MessageSquare, label: "Chat" },
-    { path: "/knowledge-base", icon: BookOpen, label: "Knowledge Base" },
-    { path: "/settings", icon: Settings, label: "Settings" },
-  ];
-
+export default function Sidebar({ sessions, pending }) {
   return (
-    <aside className="w-64 bg-zinc-900 text-white flex flex-col h-screen border-r border-zinc-800">
-      <div className="p-5 border-b border-zinc-800">
-        <h2 className="text-xl font-bold text-cyan-400 flex items-center gap-2">
-          <Brain />
-          Research AI
-        </h2>
+    <aside
+      className="
+      w-64 h-full border-r 
+      border-zinc-300 dark:border-zinc-800 
+      bg-white/60 dark:bg-zinc-900/40 
+      backdrop-blur-2xl 
+      flex flex-col 
+      p-4
+    "
+    >
+      {/* New chat button */}
+      <button
+        className="
+          w-full flex items-center gap-2 px-4 py-3 
+          rounded-xl bg-blue-500/10 dark:bg-blue-700/20 
+          text-blue-600 dark:text-blue-300 
+          border border-blue-500/20 
+          hover:bg-blue-500/20 transition
+        "
+      >
+        <Plus size={18} /> New Chat
+      </button>
+
+      {/* Sessions list */}
+      <div className="mt-6 space-y-2 flex-1 pr-1 overflow-y-auto no-scrollbar">
+        {pending ? (
+          <Loader />
+        ) : (
+          sessions.map((session) => (
+            <Session key={session.id} session={session} />
+          ))
+        )}
       </div>
-
-      <nav className="flex-1 overflow-y-auto p-4 space-y-2">
-        {menuItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = location.pathname === item.path;
-
-          return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                isActive
-                  ? "bg-cyan-600 text-white"
-                  : "text-slate-300 hover:bg-cyan-800 hover:text-white"
-              }`}
-            >
-              <Icon size={20} />
-              <span className="font-medium text-sm">{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
     </aside>
   );
-};
-
-export default Sidebar;
+}

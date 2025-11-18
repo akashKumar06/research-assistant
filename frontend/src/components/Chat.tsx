@@ -1,4 +1,7 @@
-import { useNavigate, useParams } from "react-router";
+import { useParams } from "react-router";
+import GreetingScreen from "./GreetScreen";
+import { ChatWindow } from "./ChatWindow";
+import GeneralChatInput from "./general-chat/GeneralChatInput";
 import { useEffect, useState } from "react";
 import { getUser } from "@/utils/auth";
 import { useResearchChat } from "@/hooks/research/useResearchChat";
@@ -6,26 +9,21 @@ import { useResearchMessages } from "@/hooks/research/useResearchMessages";
 import { useCreateResearchSession } from "@/hooks/research/useCreateResearchSession";
 import type { ChatMessage } from "@/types";
 import { extractPapersFromContent } from "@/utils/paper-extract";
-import { ChatWindow } from "../ChatWindow";
-import GeneralChatInput from "./GeneralChatInput";
-import GreetingScreen from "../GreetScreen";
 
-export default function GeneralChat() {
+export default function Chat() {
   const { sessionId } = useParams();
 
-  const activeSession = sessionId === "new" ? null : Number(sessionId);
-
+  const [activeSession, setActiveSession] = useState<number | null>(() =>
+    sessionId === "new" ? null : Number(sessionId)
+  );
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const { createSession } = useCreateResearchSession();
 
   const { data: loadedMessages } = useResearchMessages(activeSession);
-
   const { getResponse } = useResearchChat();
 
   const user = getUser();
-
-  const navigate = useNavigate();
 
   useEffect(() => {
     if (loadedMessages) {
@@ -41,8 +39,8 @@ export default function GeneralChat() {
       },
       {
         onSuccess: (s) => {
+          setActiveSession(s.id);
           setMessages([]);
-          navigate(`/chat/${s.id}`);
         },
       }
     );

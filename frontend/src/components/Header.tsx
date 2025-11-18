@@ -1,35 +1,53 @@
-import { useEffect, useState } from "react";
-import { useLocation } from "react-router";
+import { NavLink } from "react-router";
+import ThemeToggle from "@/components/ThemeToggle";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
-const pathMap = new Map([
-  ["dashboard", "Dashboard"],
-  ["search", "Search"],
-  ["chat", "Chat"],
-  ["knowledge-base", "Knowledge Base"],
-  ["settings", "Settings"],
-]);
-function Header() {
-  const location = useLocation();
-  const [heading, setHeading] = useState("Dashboard");
-  useEffect(() => {
-    let pathName = location.pathname.split("/")[1];
-    if (pathName == "") pathName = "dashboard";
-    setHeading(() => pathMap.get(pathName) || "Dashboard");
-  }, [location]);
+export default function Header() {
+  const navItems = [
+    { label: "General Chat", path: "/chat" },
+    { label: "PDF Chat", path: "/chat-pdf" },
+    { label: "Knowledge Base", path: "/knowledge-base" },
+  ];
+
   return (
-    <header className="bg-stone-100 dark:bg-zinc-900 border-b border-slate-200 dark:border-zinc-800 px-4 py-5 flex justify-between items-center">
-      <h1 className="text-xl font-bold dark:text-stone-200/80 text-zinc-900">
-        {heading}
-      </h1>
-      {/* <button
-                onClick={toggleDarkMode}
-                className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
-                aria-label="Toggle dark mode"
-              >
-                {isDarkMode ? "☀️" : "🌙"}
-              </button> */}
+    <header
+      className="
+      flex justify-between items-center px-6 py-4
+      bg-white/40 dark:bg-zinc-900/40
+      backdrop-blur-xl border-b border-zinc-200/50 dark:border-zinc-800
+      shadow-sm
+    "
+    >
+      {/* Left - Nav Switcher */}
+      <nav className="flex items-center gap-6">
+        {navItems.map((item) => (
+          <NavLink
+            key={item.path}
+            to={item.path}
+            className={({ isActive }) =>
+              `
+              px-4 py-2 rounded-xl text-sm font-medium transition
+              ${
+                isActive
+                  ? "bg-blue-500/20 text-blue-600 dark:text-blue-400 dark:bg-blue-500/10 shadow"
+                  : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200/40 dark:hover:bg-zinc-800/40"
+              }
+              `
+            }
+          >
+            {item.label}
+          </NavLink>
+        ))}
+      </nav>
+
+      {/* Right - Theme + User */}
+      <div className="flex items-center gap-4">
+        <ThemeToggle />
+
+        <Avatar className="border border-zinc-300 dark:border-zinc-700 shadow">
+          <AvatarFallback className="bg-zinc-700 text-white">U</AvatarFallback>
+        </Avatar>
+      </div>
     </header>
   );
 }
-
-export default Header;

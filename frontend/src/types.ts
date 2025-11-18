@@ -1,3 +1,10 @@
+export type Theme = "light" | "dark";
+
+export interface ThemeContextProps {
+  theme: Theme;
+  toggleTheme: () => void;
+}
+
 export interface Paper {
   id: string;
   title: string;

@@ -1,21 +1,19 @@
-import { useEffect, useState } from "react";
-import Sidebar from "./components/Sidebar";
-import Chat from "./pages/Chat";
-import Settings from "./pages/Settings";
-import {
-  BrowserRouter,
-  Route,
-  useLocation,
-  useSearchParams,
-} from "react-router";
+import { BrowserRouter, Navigate, Route } from "react-router";
 import { Routes } from "react-router";
 import Dashboard from "./pages/Dashboard";
-import SearchPaper from "./pages/SearchPaper";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import { Toaster } from "sonner";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import Header from "./components/Header";
-import { ChatProvider } from "./context/ChatContext";
+import Home from "./pages/Home";
+import Login from "./pages/Login";
+import Signup from "./pages/Signup";
+import ThemeProvider from "./context/ThemeContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+import GeneralChatLayout from "./components/layouts/GeneralChatLayout";
+import PDFChatLayout from "./components/layouts/PDFChatLayout";
+import PDFChat from "./components/pdf-chat/PDFChat";
+import AppLayout from "./components/layouts/AppLayout";
+import GeneralChat from "./components/general-chat/GeneralChat";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,39 +30,47 @@ const queryClient = new QueryClient({
 });
 
 export default function App() {
-  const [isDarkMode, setIsDarkMode] = useState(true);
-
-  const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode);
-    if (isDarkMode) {
-      document.documentElement.classList.remove("dark");
-    } else {
-      document.documentElement.classList.add("dark");
-    }
-  };
-
   return (
     <QueryClientProvider client={queryClient}>
-      <ChatProvider> {/* ⭐ Move ChatProvider outside BrowserRouter */}
+      <ThemeProvider>
         <BrowserRouter>
-          <div className={`flex h-screen ${isDarkMode ? "dark" : ""}`}>
-            <Sidebar />
-            <div className="flex-1 flex flex-col overflow-hidden">
-              <Header />
-              <main className="flex-1 overflow-auto bg-zinc-900">
-                <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/search" element={<SearchPaper />} />
-                  <Route path="/chat" element={<Chat />} />
-                  <Route path="/knowledge-base" element={<KnowledgeBase />} />
-                  <Route path="/settings" element={<Settings />} />
-                </Routes>
-              </main>
-            </div>
-          </div>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            ></Route>
+            <Route
+              element={
+                <ProtectedRoute>
+                  <AppLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route path="/chat" element={<GeneralChatLayout />}>
+                <Route index element={<Navigate to="/chat/new" replace />} />
+                <Route index path=":sessionId" element={<GeneralChat />} />
+              </Route>
+              <Route path="/chat-pdf" element={<PDFChatLayout />}>
+                <Route
+                  index
+                  element={<Navigate to="/chat-pdf/new" replace />}
+                />
+                <Route index path=":id" element={<PDFChat />} />
+              </Route>
+              <Route path="/knowledge-base" element={<KnowledgeBase />} />
+            </Route>
+          </Routes>
           <Toaster position="top-right" />
         </BrowserRouter>
-      </ChatProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
