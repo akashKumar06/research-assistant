@@ -105,6 +105,7 @@ dependencies = [
     "posthog==5.4.0",
     "propcache==0.4.1",
     "protobuf==6.33.0",
+    "psycopg2>=2.9.12",
     "psycopg2-binary>=2.9.11",
     "pyasn1==0.6.1",
     "pyasn1-modules==0.4.2",

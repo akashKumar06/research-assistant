@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from src.routes.user_routes import get_current_user
-from src.config.db import get_db
+from src.config.db import get_db, SessionLocal
 
 from src.services.file_storage import upload_pdf_to_cloudinary
 from src.services.vector_store import VectorStore
@@ -33,6 +33,12 @@ router = APIRouter(prefix="/chat", tags=["Chat"])
 
 class Query(BaseModel):
     question: str
+
+# Must match the upload size limit actually configured on the Cloudinary
+# account (Settings → Upload) — checking this ourselves lets us fail fast
+# with a clear message instead of a 500 after uploading the whole file to
+# Cloudinary just to have it reject it.
+MAX_PDF_SIZE_BYTES = 20 * 1024 * 1024
 
 
 # -------------------------------------------------------
@@ -56,6 +62,14 @@ async def upload_pdf(
         # 1️⃣ Read file bytes
         file_bytes = await file.read()
 
+        if len(file_bytes) > MAX_PDF_SIZE_BYTES:
+            size_mb = len(file_bytes) / (1024 * 1024)
+            limit_mb = MAX_PDF_SIZE_BYTES / (1024 * 1024)
+            raise HTTPException(
+                413,
+                detail=f"PDF is {size_mb:.1f}MB, which is over the {limit_mb:.0f}MB upload limit. Please upload a smaller file.",
+            )
+
         # 2️⃣ Upload to Cloudinary
         cloud_url = upload_pdf_to_cloudinary(file_bytes, file.filename)
 
@@ -78,7 +92,7 @@ async def upload_pdf(
         vector_store = VectorStore(pdf_id)
         vector_store.add_embeddings(chunks)
 
-        # 6️⃣ Save metadata in PostgreSQL
+        # 6️⃣ Save metadata in Post+greSQL
         new_pdf = PDF(
             id=pdf_id,
             user_id=user.id,
@@ -97,12 +111,36 @@ async def upload_pdf(
             "file_url": cloud_url,
         }
 
+    except HTTPException:
+        # Already a clean, user-facing error (e.g. the size check above) —
+        # don't let the generic handler below re-wrap it as a 500.
+        raise
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(
             500,
             detail=f"PDF upload error: {str(e)}"
         )
+
+
+# -------------------------------------------------------
+#                LIST UPLOADED PDFs (sidebar)
+# -------------------------------------------------------
+
+@router.get("")
+def list_user_pdfs(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """List all PDFs the current user has uploaded, most recent first."""
+
+    pdfs = (
+        db.query(PDF)
+        .filter(PDF.user_id == user.id)
+        .order_by(PDF.uploaded_at.desc())
+        .all()
+    )
+    return {"pdfs": pdfs}
 
 
 # -------------------------------------------------------
@@ -146,17 +184,27 @@ async def chat_with_pdf(
                     yield chunk.content
                 await asyncio.sleep(0.01)
 
-            # Save chat in DB after model finishes
-            chat_entry = Chat(
-                user_id=user.id,
-                pdf_id=pdf_id,
-                role="user",
-                message=query.question,
-                response=ai_response,
-            )
-            
-            db.add(chat_entry)
-            db.commit()
+            # NOTE: FastAPI tears down `Depends(get_db)` (i.e. calls db.close())
+            # as soon as this endpoint function returns the StreamingResponse
+            # object, which happens *before* this generator body ever runs —
+            # the request-scoped `db` above is already closed by this point.
+            # A fresh session is required, otherwise this save silently fails
+            # and the exchange never shows up in chat history.
+            save_db = SessionLocal()
+            try:
+                chat_entry = Chat(
+                    user_id=user.id,
+                    pdf_id=pdf_id,
+                    role="user",
+                    message=query.question,
+                    response=ai_response,
+                )
+                save_db.add(chat_entry)
+                save_db.commit()
+            except Exception:
+                traceback.print_exc()
+            finally:
+                save_db.close()
 
         return StreamingResponse(stream_response(), media_type="text/event-stream")
 

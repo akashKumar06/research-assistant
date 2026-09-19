@@ -24,6 +24,7 @@ class ToolAgent:
             task="text-generation",
             huggingfacehub_api_token=HUGGINGFACE_API_KEY
         )
+        
         self.chat_model = ChatHuggingFace(llm=hf_llm)
 
         # ---- Tools ----

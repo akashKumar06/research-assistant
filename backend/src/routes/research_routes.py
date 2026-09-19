@@ -16,7 +16,7 @@ from src.services.research_session import ResearchSessionService
 from src.services.research_message import ResearchMessageService
 from src.services.tool_agent import ToolAgent
 
-from src.config.db import get_db
+from src.config.db import get_db, SessionLocal
 from src.routes.user_routes import get_current_user
 from src.models.user_model import User
 
@@ -154,10 +154,24 @@ def research_chat(
                 ai_output += chunk.content
                 yield chunk.content
 
-        # Save assistant output
+        # NOTE: FastAPI tears down `Depends(get_db)` (i.e. calls db.close())
+        # as soon as this endpoint function returns the StreamingResponse
+        # object, which happens *before* this generator body ever runs —
+        # the request-scoped `db` above is already closed by this point.
+        # A fresh session is required to persist the finished reply,
+        # otherwise the assistant's answer silently fails to save and the
+        # conversation looks incomplete/vanished the next time it loads.
         if ai_output:
-            ResearchMessageService.add_message(
-                db, session_id, "assistant", ai_output
-            )
+            save_db = SessionLocal()
+            try:
+                ResearchMessageService.add_message(
+                    save_db, session_id, "assistant", ai_output
+                )
+            except Exception:
+                import traceback
+
+                traceback.print_exc()
+            finally:
+                save_db.close()
 
     return StreamingResponse(stream(), media_type="text/event-stream")

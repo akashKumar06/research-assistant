@@ -1,26 +1,27 @@
-import os
-from dotenv import load_dotenv
-from langchain_huggingface import HuggingFaceEndpointEmbeddings
+from typing import List
+from langchain_huggingface import HuggingFaceEmbeddings
 
-load_dotenv()
+# Runs sentence-transformers locally (weights are cached on first use) instead
+# of calling HuggingFace's shared, rate-limited Inference API per chunk — that
+# remote endpoint is what was throwing intermittent 502 "Bad Gateway" /
+# "workload not running" errors on larger PDFs. Loaded once and reused.
+_embedder: HuggingFaceEmbeddings | None = None
 
-HF_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
 
-def embed_text(text: str):
-    """
-    Generate embeddings for a query or document chunk
-    using HuggingFace Inference API.
-    Returns a vector (list of floats).
-    """
+def _get_embedder() -> HuggingFaceEmbeddings:
+    global _embedder
+    if _embedder is None:
+        _embedder = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2"
+        )
+    return _embedder
 
-    
-    if not HF_API_KEY:
-        raise ValueError("HUGGINGFACE_API_KEY not found in environment variables")
 
-    embeddings = HuggingFaceEndpointEmbeddings(model="sentence-transformers/all-MiniLM-L6-v2", task="feature-extraction", huggingfacehub_api_token=HF_API_KEY)
-    result = embeddings.embed_query(text)
+def embed_text(text: str) -> List[float]:
+    """Generate an embedding for a single query string."""
+    return _get_embedder().embed_query(text)
 
-    if isinstance(result, list) and isinstance(result[0], list):
-        return result[0]
 
-    return result
+def embed_texts(texts: List[str]) -> List[List[float]]:
+    """Generate embeddings for a batch of document chunks in one pass."""
+    return _get_embedder().embed_documents(texts)

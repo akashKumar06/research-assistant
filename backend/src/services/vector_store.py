@@ -30,7 +30,7 @@ class VectorStore:
             print(f"[VectorStore] Creating Pinecone index: {self.index_name}")
             self.pc.create_index(
                 name=self.index_name,
-                dimension=1024,            # matches embedding model dimension
+                dimension=384,             # matches all-MiniLM-L6-v2 output size
                 metric="cosine",
                 spec=ServerlessSpec(cloud="aws", region="us-east-1")
             )
@@ -49,26 +49,35 @@ class VectorStore:
 
         print(f"[VectorStore] Adding {len(chunks)} chunks to namespace: {self.pdf_id}")
 
-        from src.services.embeddings import embed_text
+        from src.services.embeddings import embed_texts
 
-        vectors = []
+        # Embed all chunks locally in one batched pass instead of one HTTP
+        # round-trip per chunk — both far faster and immune to the remote
+        # Inference API's transient 502s on large documents.
+        texts = [chunk.page_content for chunk in chunks]
+        embeddings = embed_texts(texts)
 
-        for chunk in chunks:
-            chunk_id = str(uuid.uuid4())
-
-            # 🔥 Generate embedding for each PDF chunk
-            embedding = embed_text(chunk.page_content)
-
-            vectors.append({
-                "id": chunk_id,
+        vectors = [
+            {
+                "id": str(uuid.uuid4()),
                 "values": embedding,
                 "metadata": {
                     "text": chunk.page_content,
-                    "source": self.pdf_id
-                }
-            })
+                    "source": self.pdf_id,
+                },
+            }
+            for chunk, embedding in zip(chunks, embeddings)
+        ]
 
-        self.index.upsert(vectors=vectors, namespace=self.pdf_id)
+        # Pinecone rejects/struggles with very large single upsert payloads,
+        # so push them in batches.
+        UPSERT_BATCH_SIZE = 100
+        for i in range(0, len(vectors), UPSERT_BATCH_SIZE):
+            batch = vectors[i : i + UPSERT_BATCH_SIZE]
+            self.index.upsert(vectors=batch, namespace=self.pdf_id)
+            print(
+                f"[VectorStore] Upserted {min(i + UPSERT_BATCH_SIZE, len(vectors))}/{len(vectors)} vectors"
+            )
 
         print(f"[VectorStore] Successfully stored embeddings in Pinecone")
 

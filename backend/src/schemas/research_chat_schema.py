@@ -19,7 +19,6 @@ class ResearchSessionResponse(BaseModel):
         "from_attributes": True
     }
 
-
 class ResearchMessageCreate(BaseModel):
     session_id: int
     role: Literal["user", "assistant", "tool"]
