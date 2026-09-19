@@ -1,51 +1,55 @@
-import { NavLink } from "react-router";
+import { Link, NavLink } from "react-router";
 import ThemeToggle from "@/components/ThemeToggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import Logo from "@/components/Logo";
+import { getUser } from "@/utils/auth";
+import { MessageCircle, FileStack, Library } from "lucide-react";
 
 export default function Header() {
   const navItems = [
-    { label: "General Chat", path: "/chat" },
-    { label: "PDF Chat", path: "/chat-pdf" },
-    { label: "Knowledge Base", path: "/knowledge-base" },
+    { label: "General Chat", path: "/chat", icon: MessageCircle },
+    { label: "PDF Chat", path: "/chat-pdf", icon: FileStack },
+    { label: "Knowledge Base", path: "/knowledge-base", icon: Library },
   ];
 
+  const user = getUser();
+  const initial = (user?.name || user?.email || "U").charAt(0).toUpperCase();
+
   return (
-    <header
-      className="
-      flex justify-between items-center px-6 py-4
-      bg-white/40 dark:bg-zinc-900/40
-      backdrop-blur-xl border-b border-zinc-200/50 dark:border-zinc-800
-      shadow-sm
-    "
-    >
-      {/* Left - Nav Switcher */}
-      <nav className="flex items-center gap-6">
+    <header className="relative z-20 flex items-center justify-between gap-4 px-6 py-3.5 glass-panel border-x-0 border-t-0">
+      {/* Left - Brand */}
+      <Link to="/dashboard" className="shrink-0">
+        <Logo />
+      </Link>
+
+      {/* Center - Nav Switcher */}
+      <nav className="flex items-center gap-1 rounded-full border border-border bg-muted/60 p-1">
         {navItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
             className={({ isActive }) =>
-              `
-              px-4 py-2 rounded-xl text-sm font-medium transition
-              ${
+              `flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium transition-all ${
                 isActive
-                  ? "bg-blue-500/20 text-blue-600 dark:text-blue-400 dark:bg-blue-500/10 shadow"
-                  : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200/40 dark:hover:bg-zinc-800/40"
-              }
-              `
+                  ? "bg-linear-to-r from-indigo-500 to-violet-500 text-white shadow-sm shadow-indigo-500/30"
+                  : "text-muted-foreground hover:text-foreground hover:bg-background/80"
+              }`
             }
           >
-            {item.label}
+            <item.icon size={15} />
+            <span className="hidden sm:inline">{item.label}</span>
           </NavLink>
         ))}
       </nav>
 
       {/* Right - Theme + User */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3 shrink-0">
         <ThemeToggle />
 
-        <Avatar className="border border-zinc-300 dark:border-zinc-700 shadow">
-          <AvatarFallback className="bg-zinc-700 text-white">U</AvatarFallback>
+        <Avatar className="border-2 border-background ring-1 ring-border shadow-sm">
+          <AvatarFallback className="bg-linear-to-br from-indigo-500 to-fuchsia-500 text-white font-semibold text-sm">
+            {initial}
+          </AvatarFallback>
         </Avatar>
       </div>
     </header>

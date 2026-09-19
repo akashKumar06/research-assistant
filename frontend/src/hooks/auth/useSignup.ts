@@ -11,7 +11,7 @@ interface SignupPayload {
 export default function useSignup() {
   return useMutation({
     mutationFn: async (payload: SignupPayload) => {
-      const res = await api.post("/auth/signup", payload);
+      const res = await api.post("/users/register", payload);
       return res.data;
     },
 

@@ -2,7 +2,7 @@ import api from "@/api/axios";
 import { useQuery } from "@tanstack/react-query";
 
 export function useResearchMessages(sessionId: number | null) {
-  return useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["research-messages", sessionId],
     queryFn: async () => {
       if (!sessionId) return [];
@@ -11,4 +11,5 @@ export function useResearchMessages(sessionId: number | null) {
     },
     enabled: !!sessionId,
   });
+  return { data, isLoading };
 }

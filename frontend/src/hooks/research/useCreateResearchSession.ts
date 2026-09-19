@@ -7,11 +7,15 @@ interface CreateSessionPayload {
 }
 
 export function useCreateResearchSession() {
-  const { mutate: createSession, isPending } = useMutation({
+  const {
+    mutate: createSession,
+    mutateAsync: createSessionAsync,
+    isPending,
+  } = useMutation({
     mutationFn: async (payload: CreateSessionPayload) => {
       const res = await api.post("/research/sessions", payload);
       return res.data;
     },
   });
-  return { createSession, isPending };
+  return { createSession, createSessionAsync, isPending };
 }

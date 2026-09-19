@@ -1,54 +1,60 @@
-import { useDeleteResearchSession } from "@/hooks/research/useDeleteResearchSession";
-import { useQueryClient } from "@tanstack/react-query";
-import { LoaderIcon, MessageSquare, Trash2 } from "lucide-react";
+import { Loader2, MessageSquare, Trash2 } from "lucide-react";
 import { Link } from "react-router";
+import { cn } from "@/lib/utils";
+import type { MouseEvent } from "react";
 
-function Session({ session }) {
-  const qc = useQueryClient();
+interface SessionProps {
+  session: { id: string | number; title: string };
+  isActive?: boolean;
+  onDelete: (id: string | number) => void;
+  isDeleting?: boolean;
+}
 
-  const { deleteSession, isDeleting } = useDeleteResearchSession();
-
-  function handleDelete(session_id: number) {
-    deleteSession(session_id, {
-      onSuccess: () => {
-        qc.invalidateQueries(["research-sessions"]);
-      },
-    });
+function Session({ session, isActive, onDelete, isDeleting }: SessionProps) {
+  function handleDelete(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    onDelete(session.id);
   }
+
   return (
     <Link
       to={`${session.id}`}
       key={session.id}
-      className="
-                group w-full flex items-center justify-between 
-                px-4 py-3 rounded-lg 
-                hover:bg-zinc-200 dark:hover:bg-zinc-800 
-                text-zinc-700 dark:text-zinc-300
-                cursor-pointer
-              "
+      className={cn(
+        "group w-full flex items-center justify-between gap-2 pl-3 pr-2 py-2.5 rounded-lg cursor-pointer transition-colors",
+        isActive
+          ? "bg-accent text-accent-foreground"
+          : "text-foreground/80 hover:bg-accent/60"
+      )}
     >
       {/* Left section (icon + title) */}
-      <button className="flex items-center gap-2 flex-1 overflow-hidden">
-        <MessageSquare size={16} className="text-zinc-500 dark:text-zinc-400" />
-        <span className="truncate">{session.title}</span>
-      </button>
+      <div className="flex items-center gap-2.5 flex-1 overflow-hidden">
+        <MessageSquare
+          size={15}
+          className={cn(
+            "shrink-0",
+            isActive ? "text-indigo-500" : "text-muted-foreground"
+          )}
+        />
+        <span className="truncate text-sm">{session.title}</span>
+      </div>
 
-      {/* Right: delete button → visible only on hover */}
-
+      {/* Right: delete button — visible only on hover */}
       {!isDeleting ? (
         <button
-          onClick={() => handleDelete(Number(session.id))}
+          onClick={handleDelete}
           className="
-                  opacity-0 group-hover:opacity-100 
+                  opacity-0 group-hover:opacity-100
                   transition-opacity duration-200
-                  text-red-500 hover:text-red-600
-                  p-1 rounded
+                  text-muted-foreground hover:text-destructive
+                  p-1 rounded shrink-0
                 "
         >
-          <Trash2 size={16} />
+          <Trash2 size={14} />
         </button>
       ) : (
-        <LoaderIcon size={16} />
+        <Loader2 size={14} className="animate-spin text-muted-foreground shrink-0" />
       )}
     </Link>
   );

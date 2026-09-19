@@ -16,95 +16,50 @@ export default function PDFChat() {
 
   const { getResponse } = usePdfChat();
 
-  const { messages: loadedMessages } = usePdfHistory(pdfId);
+  const { messages: loadedMessages, isLoading: isLoadingHistory } =
+    usePdfHistory(pdfId);
 
   useEffect(() => {
+    if (id === "new") {
+      setMessages([]);
+      return;
+    }
     if (loadedMessages) {
       setMessages(loadedMessages);
     }
-  }, [loadedMessages]);
+  }, [loadedMessages, id]);
 
   const navigate = useNavigate();
 
+  const streamAssistantReply = async (
+    reader: ReadableStreamDefaultReader<Uint8Array> | undefined,
+    aiMessageId: string
+  ) => {
+    if (!reader) return;
+
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value);
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === aiMessageId
+            ? { ...msg, content: msg.content + chunk }
+            : msg
+        )
+      );
+    }
+  };
+
   const handleSend = async (text: string, pdf_id_from_upload: string) => {
-    let finalPdfId = pdfId;
+    const finalPdfId = pdfId ?? pdf_id_from_upload;
 
     if (!finalPdfId) {
-      finalPdfId = pdf_id_from_upload;
-
-      const userMessage: ChatMessage = {
-        id: `msg_${Date.now()}`,
-        role: "user",
-        content: text,
-        timestamp: new Date(),
-      };
-
-      setMessages((prev) => [...prev, userMessage]);
-
-      const aiMessageId = `msg_${Date.now()}_ai`;
-      setMessages?.((prev: ChatMessage[]) => [
-        ...prev,
-        {
-          id: aiMessageId,
-          role: "assistant",
-          content: "",
-          timestamp: new Date(),
-        },
-      ]);
-
-      try {
-        const body = {
-          pdf_id: finalPdfId,
-          question: text,
-        };
-        getResponse(body, {
-          onError: (err) => {
-            console.error("❌ Error getting AI response:", err);
-            setMessages?.((prev: ChatMessage[]) =>
-              prev.map((msg) =>
-                msg.id === aiMessageId
-                  ? {
-                      ...msg,
-                      content:
-                        "Sorry, there was an error processing your request. Please try again.",
-                    }
-                  : msg
-              )
-            );
-          },
-          onSuccess: async (reader) => {
-            if (!reader) {
-              return;
-            }
-
-            const decoder = new TextDecoder();
-            let isFirstChunk = true;
-
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) {
-                break;
-              }
-              const chunk = decoder.decode(value);
-
-              if (isFirstChunk) {
-                isFirstChunk = false;
-              }
-
-              setMessages?.((prev: ChatMessage[]) =>
-                prev.map((msg) =>
-                  msg.id === aiMessageId
-                    ? { ...msg, content: msg.content + chunk }
-                    : msg
-                )
-              );
-            }
-          },
-        });
-      } catch (err) {
-        console.error("Search error:", err);
-      }
-      navigate(`/chat-pdf/${finalPdfId}`);
+      alert("Please upload a file");
+      return;
     }
 
     const userMessage: ChatMessage = {
@@ -113,29 +68,24 @@ export default function PDFChat() {
       content: text,
       timestamp: new Date(),
     };
-
-    setMessages((prev) => [...prev, userMessage]);
-
     const aiMessageId = `msg_${Date.now()}_ai`;
-    setMessages?.((prev: ChatMessage[]) => [
+
+    setMessages((prev) => [
       ...prev,
-      {
-        id: aiMessageId,
-        role: "assistant",
-        content: "",
-        timestamp: new Date(),
-      },
+      userMessage,
+      { id: aiMessageId, role: "assistant", content: "", timestamp: new Date() },
     ]);
 
+    if (!pdfId) {
+      navigate(`/chat-pdf/${finalPdfId}`);
+    }
+
     try {
-      const body = {
-        pdf_id: finalPdfId,
-        question: text,
-      };
+      const body = { pdf_id: finalPdfId, question: text };
       getResponse(body, {
         onError: (err) => {
           console.error("❌ Error getting AI response:", err);
-          setMessages?.((prev: ChatMessage[]) =>
+          setMessages((prev) =>
             prev.map((msg) =>
               msg.id === aiMessageId
                 ? {
@@ -147,51 +97,26 @@ export default function PDFChat() {
             )
           );
         },
-        onSuccess: async (reader) => {
-          if (!reader) {
-            return;
-          }
-
-          const decoder = new TextDecoder();
-          let isFirstChunk = true;
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-              break;
-            }
-            const chunk = decoder.decode(value);
-
-            if (isFirstChunk) {
-              isFirstChunk = false;
-            }
-
-            setMessages?.((prev: ChatMessage[]) =>
-              prev.map((msg) =>
-                msg.id === aiMessageId
-                  ? { ...msg, content: msg.content + chunk }
-                  : msg
-              )
-            );
-          }
-        },
+        onSuccess: (reader) => streamAssistantReply(reader, aiMessageId),
       });
     } catch (err) {
       console.error("Search error:", err);
     }
   };
 
+  const showGreeting = id === "new" && messages.length === 0;
+
   return (
     <>
-      {id === "new" ? (
+      {showGreeting ? (
         <GreetingScreen
-          heading={"✨How can I help you today?"}
+          heading={"✨ How can I help you today?"}
           subHeading={
-            "Ask anything — research questions, paper summaries, explanations, or technical help."
+            "Upload a PDF below, then ask questions about it — summaries, key findings, or anything you need explained."
           }
         />
       ) : (
-        <ChatWindow messages={messages} />
+        <ChatWindow messages={messages} isLoadingHistory={isLoadingHistory} />
       )}
 
       <PDFChatInput onSend={handleSend} />

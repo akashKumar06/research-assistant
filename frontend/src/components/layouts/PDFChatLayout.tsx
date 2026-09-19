@@ -1,14 +1,37 @@
 import Sidebar from "@/components/Sidebar";
-import { useResearchSessions } from "@/hooks/research/useResearchSessions";
-import { Outlet } from "react-router";
+import { usePdfSessions } from "@/hooks/pdf/usePdfSessions";
+import { useDeletePdf } from "@/hooks/pdf/usePdfDelete";
+import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useParams, Outlet } from "react-router";
 
 export default function PDFChatLayout() {
-  const { sessions, isPending } = useResearchSessions();
+  const { sessions, isPending } = usePdfSessions();
+  const { mutate: deletePdf, isPending: isDeleting, variables: deletingId } =
+    useDeletePdf();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { id } = useParams();
+
+  const handleDelete = (pdfId: string | number) => {
+    deletePdf(String(pdfId), {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["pdf-sessions"] });
+        if (String(pdfId) === id) {
+          navigate("/chat-pdf/new");
+        }
+      },
+    });
+  };
 
   return (
-    <div className="flex h-full overflow-hidden bg-linear-to-b from-zinc-50 to-white dark:from-black dark:to-zinc-900">
-      <Sidebar sessions={sessions} pending={isPending} />
-      <div className="flex-1 h-full relative flex flex-col justify-between">
+    <div className="flex h-full overflow-hidden">
+      <Sidebar
+        sessions={sessions ?? []}
+        pending={isPending}
+        onDelete={handleDelete}
+        deletingId={isDeleting ? deletingId : null}
+      />
+      <div className="flex-1 h-full relative flex flex-col justify-between overflow-hidden">
         <Outlet />
       </div>
     </div>

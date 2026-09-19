@@ -20,27 +20,38 @@ export default function GeneralChatInput({ onSend }: GeneralChatInputProps) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       className="
-        absolute bottom-6 left-0 right-0   /* <-- Replaced mb-6 */
-        w-full max-w-3xl mx-auto p-3    
-        bg-white/50 dark:bg-zinc-900/50 
-        backdrop-blur-xl rounded-2xl 
-        border border-zinc-300/40 dark:border-zinc-700 
-        flex items-center gap-3 shadow-lg
+        absolute bottom-6 left-0 right-0 px-4
+        w-full max-w-2xl mx-auto
       "
     >
-      <input
-        className="flex-1 bg-transparent outline-none text-zinc-900 dark:text-white placeholder:text-zinc-500"
-        placeholder="Ask anything about research..."
-        value={question}
-        onChange={(e) => setQuestion(e.target.value)}
-      />
-
-      <button
-        onClick={handleClick}
-        className="p-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition"
+      <div
+        className="
+          flex items-center gap-2 p-2 pl-4
+          glass-panel rounded-2xl
+          shadow-xl shadow-black/5 dark:shadow-black/30
+          focus-within:ring-2 focus-within:ring-indigo-500/40 focus-within:border-indigo-500/40
+          transition-all
+        "
       >
-        <Send size={18} />
-      </button>
+        <input
+          className="flex-1 bg-transparent outline-none text-sm text-foreground placeholder:text-muted-foreground py-2"
+          placeholder="Ask anything about research..."
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleClick()}
+        />
+
+        <button
+          onClick={handleClick}
+          disabled={!question.trim()}
+          className="shrink-0 p-2.5 rounded-xl bg-linear-to-br from-indigo-500 to-violet-500 text-white shadow-md shadow-indigo-500/30 hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:pointer-events-none transition-all"
+        >
+          <Send size={16} />
+        </button>
+      </div>
+      <p className="text-center text-[11px] text-muted-foreground mt-2">
+        Nexus can make mistakes. Verify important research findings.
+      </p>
     </motion.div>
   );
 }

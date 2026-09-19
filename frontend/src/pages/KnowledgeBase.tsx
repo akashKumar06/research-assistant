@@ -1,6 +1,9 @@
+import { useMemo, useState } from "react";
 import KBItemCard from "@/components/knowledge-base/KBItemCard";
-import ThemeToggle from "@/components/ThemeToggle";
+import KBSearchBar from "@/components/knowledge-base/KBSearchBar";
+import KBEmptyState from "@/components/knowledge-base/KBEmptyState";
 import { motion } from "framer-motion";
+import { Library } from "lucide-react";
 
 const dummyPapers = [
   {
@@ -30,28 +33,53 @@ const dummyPapers = [
 ];
 
 export default function KnowledgeBase() {
+  const [query, setQuery] = useState("");
+
+  const filteredPapers = useMemo(() => {
+    if (!query.trim()) return dummyPapers;
+    const q = query.toLowerCase();
+    return dummyPapers.filter(
+      (p) =>
+        p.title.toLowerCase().includes(q) ||
+        p.authors.toLowerCase().includes(q)
+    );
+  }, [query]);
+
   return (
-    <div className="relative p-10">
+    <div className="relative min-h-full p-6 sm:p-10 max-w-6xl mx-auto">
       {/* Page Heading */}
-      <motion.h1
+      <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="
-          text-4xl font-extrabold 
-          text-zinc-900 dark:text-white mb-10
-        "
+        className="flex items-center gap-3 mb-8"
       >
-        Your Knowledge Base
-      </motion.h1>
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-linear-to-br from-indigo-500 to-fuchsia-500 shadow-md shadow-indigo-500/25">
+          <Library className="h-5 w-5 text-white" />
+        </div>
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground">
+            Your Knowledge Base
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {dummyPapers.length} papers saved
+          </p>
+        </div>
+      </motion.div>
+
+      <div className="mb-8">
+        <KBSearchBar query={query} setQuery={setQuery} />
+      </div>
 
       {/* Paper Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {dummyPapers.map((paper) => (
-          <KBItemCard key={paper.id} {...paper} />
-        ))}
-      </div>
+      {filteredPapers.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredPapers.map((paper) => (
+            <KBItemCard key={paper.id} {...paper} />
+          ))}
+        </div>
+      ) : (
+        <KBEmptyState />
+      )}
     </div>
   );
 }
-
-

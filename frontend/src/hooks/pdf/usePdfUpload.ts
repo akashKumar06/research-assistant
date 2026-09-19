@@ -6,6 +6,8 @@ export function usePdfUpload() {
     mutate: uploadFile,
     isPending,
     isSuccess,
+    isError,
+    error,
   } = useMutation({
     mutationFn: async (file: File) => {
       const formData = new FormData();
@@ -18,5 +20,5 @@ export function usePdfUpload() {
       return res.data;
     },
   });
-  return { uploadFile, isPending, isSuccess };
+  return { uploadFile, isPending, isSuccess, isError, error };
 }
