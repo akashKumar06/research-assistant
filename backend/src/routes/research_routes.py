@@ -39,7 +39,6 @@ def convert_history_for_agent(messages):
             history.append(SystemMessage(f"[Tool Output]\n{m.content}"))
     return history
 
-
 def _generate_and_save_title(model, session_id: int, user_query: str, ai_output: str):
     """
     Runs on a background thread, off the request/response cycle, so it never
