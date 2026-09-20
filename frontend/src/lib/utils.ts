@@ -6,9 +6,12 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function getErrorMessage(err: unknown, fallback = "Something went wrong"): string {
-  const detail = (err as any)?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  const message = (err as any)?.message;
-  if (typeof message === "string" && message) return message;
+  if (err && typeof err === "object") {
+    const response = (err as { response?: { data?: { detail?: unknown } } }).response;
+    if (typeof response?.data?.detail === "string") return response.data.detail;
+
+    const message = (err as { message?: unknown }).message;
+    if (typeof message === "string" && message) return message;
+  }
   return fallback;
 }

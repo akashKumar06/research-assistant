@@ -16,6 +16,10 @@ import { getErrorMessage } from "@/lib/utils";
 
 const MAX_PDF_SIZE_BYTES = 20 * 1024 * 1024; // matches the backend's Cloudinary limit
 
+interface UploadedPdf {
+  pdf_id: string;
+}
+
 const FilePlaceholder = ({
   file,
   index,
@@ -25,7 +29,7 @@ const FilePlaceholder = ({
   file: File;
   index: number;
   onRemoveFile: (index: number) => void;
-  setFile: (data) => void;
+  setFile: (data: UploadedPdf) => void;
 }) => {
   const { uploadFile, isPending, isSuccess, isError, error } = usePdfUpload();
 
@@ -80,11 +84,15 @@ const FilePlaceholder = ({
   );
 };
 
-export default function PDFChatInput({ onSend }) {
+export default function PDFChatInput({
+  onSend,
+}: {
+  onSend: (query: string, pdfId: string) => void;
+}) {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
-  const [file, setFile] = useState(null);
+  const [file, setFile] = useState<UploadedPdf | null>(null);
 
   const handleRemoveFile = (index: number) => {
     setUploadedFiles((files) => files.filter((_, i) => i !== index));

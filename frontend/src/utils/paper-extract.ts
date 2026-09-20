@@ -1,5 +1,12 @@
-export const extractPapersFromContent = (content: string) => {
-  const papers: any[] = [];
+export interface ExtractedPaper {
+  title: string;
+  url: string;
+  pdf_url: string;
+  abstract: string;
+}
+
+export const extractPapersFromContent = (content: string): ExtractedPaper[] => {
+  const papers: ExtractedPaper[] = [];
 
   // Match arXiv URLs (both http and https, with or without version)
   const arxivRegex = /https?:\/\/arxiv\.org\/abs\/([\d.]+)(?:v\d+)?/g;

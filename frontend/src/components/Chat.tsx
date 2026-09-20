@@ -32,6 +32,8 @@ export default function Chat() {
   }, [loadedMessages]);
 
   const handleNewChat = async (text: string) => {
+    if (!user) return;
+
     createSession(
       {
         user_id: user.id,
@@ -47,6 +49,8 @@ export default function Chat() {
   };
 
   const handleSend = async (text: string) => {
+    if (!user) return;
+
     if (!activeSession) {
       await handleNewChat(text);
     }

@@ -107,14 +107,15 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
         content:
           "Attention mechanisms provide several key advantages in modern neural networks:\n\n1. **Parallelization**: Unlike RNNs, attention allows all tokens to be processed in parallel, enabling faster training.\n\n2. **Long-range Dependencies**: The attention mechanism can directly connect distant tokens, solving the long-range dependency problem better than RNNs.\n\n3. **Interpretability**: Attention weights can be visualized to understand which parts of the input the model focuses on.\n\n4. **Flexibility**: Can be applied to various tasks and modalities without significant architectural changes.\n\n5. **Scalability**: Works well with very large models and datasets.",
         timestamp: new Date("2025-11-03T14:00:30Z"),
-        sources: [
-          {
-            paperId: "arxiv_2023_001",
-            title: "Attention Is All You Need",
-            excerpt:
-              "The attention mechanism allows the model to focus on different parts of the input sequence when producing each element of the output sequence",
-          },
-        ],
+        metadata: {
+          papers: [
+            {
+              title: "Attention Is All You Need",
+              abstract:
+                "The attention mechanism allows the model to focus on different parts of the input sequence when producing each element of the output sequence",
+            },
+          ],
+        },
       },
     ],
     createdAt: new Date("2025-11-03T14:00:00Z"),
@@ -150,14 +151,14 @@ export const mockApi = {
   },
 
   // Add paper to knowledge base - Workflow A
-  addPaperToKB: async (paperId: string): Promise<{ success: boolean }> => {
+  addPaperToKB: async (_paperId: string): Promise<{ success: boolean }> => {
     await new Promise((resolve) => setTimeout(resolve, 500));
     return { success: true };
   },
 
   // Chat API - Maps to Workflow B
   sendChatMessage: async (
-    conversationId: string,
+    _conversationId: string,
     message: string
   ): Promise<ChatMessage> => {
     await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -167,13 +168,18 @@ export const mockApi = {
       role: "assistant",
       content: `This is a mock response to: "${message}". In production, this would be replaced with actual LLM responses from your FastAPI backend using the RAG pipeline.`,
       timestamp: new Date(),
-      sources: MOCK_PAPERS.filter((p) => p.addedToKB)
-        .slice(0, 2)
-        .map((p) => ({
-          paperId: p.id,
-          title: p.title,
-          excerpt: p.abstract.substring(0, 100) + "...",
-        })),
+      metadata: {
+        papers: MOCK_PAPERS.filter((p) => p.addedToKB)
+          .slice(0, 2)
+          .map((p) => ({
+            title: p.title,
+            authors: p.authors,
+            year: String(p.year),
+            url: p.pdfUrl,
+            pdf_url: p.pdfUrl,
+            abstract: p.abstract.substring(0, 100) + "...",
+          })),
+      },
     };
   },
 

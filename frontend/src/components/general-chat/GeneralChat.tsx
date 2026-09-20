@@ -89,7 +89,10 @@ export default function GeneralChat() {
   };
 
   const handleSend = async (text: string) => {
+    if (!user) return;
+
     let sessionIdToUse = activeSession;
+    const isNewSession = !sessionIdToUse;
 
     const userMessage: ChatMessage = {
       id: `msg_${Date.now()}`,
@@ -158,7 +161,19 @@ export default function GeneralChat() {
             )
           );
         },
-        onSuccess: (reader) => streamAssistantReply(reader, aiMessageId),
+        onSuccess: async (reader) => {
+          await streamAssistantReply(reader, aiMessageId);
+
+          // The backend generates a proper title from the first exchange on
+          // a background thread, so it isn't ready the instant this request
+          // finishes — give it a moment, then refetch so the sidebar picks
+          // up the real title instead of the raw first message.
+          if (isNewSession) {
+            setTimeout(() => {
+              queryClient.invalidateQueries({ queryKey: ["research-sessions"] });
+            }, 3000);
+          }
+        },
       });
     } catch (err) {
       console.error("Search error:", err);

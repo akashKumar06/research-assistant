@@ -1,6 +1,7 @@
 import api from "@/api/axios";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
+import type { AxiosError } from "axios";
 
 interface SignupPayload {
   name: string;
@@ -19,9 +20,9 @@ export default function useSignup() {
       toast.success(`Account created for ${data.name}. Please login.`);
     },
 
-    onError: (err: any) => {
+    onError: (err: AxiosError<{ detail?: string }>) => {
       const message =
-        err?.response?.data?.detail ||
+        err.response?.data?.detail ||
         "Signup failed. Please try a different email.";
 
       toast.error(message);

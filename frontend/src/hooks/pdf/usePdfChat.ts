@@ -1,5 +1,10 @@
 import { useMutation } from "@tanstack/react-query";
 
+interface PdfChatRequest {
+  pdf_id: string;
+  question: string;
+}
+
 export function usePdfChat() {
   const token = localStorage.getItem("access_token");
   let authorization = "";
@@ -12,7 +17,7 @@ export function usePdfChat() {
     isPending,
     isSuccess,
   } = useMutation({
-    mutationFn: async (data: object) => {
+    mutationFn: async (data: PdfChatRequest) => {
       const pdf_id = data.pdf_id;
       const response = await fetch(`http://localhost:8000/chat/${pdf_id}`, {
         method: "POST",
