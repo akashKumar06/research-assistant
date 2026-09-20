@@ -7,36 +7,51 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Pinecone client + index-existence check used to be redone from scratch in
+# every VectorStore(...) call — which happens on every single upload, search
+# and delete. `list_indexes()` and `Index()` are both network round-trips, so
+# that added a full extra Pinecone API call to the critical path of every
+# chat message. Cache the client and the "index confirmed to exist" flag at
+# module level so that work happens at most once per process.
+_pc: Pinecone | None = None
+_verified_indexes: set[str] = set()
+
+
+def _get_pinecone_client() -> Pinecone:
+    global _pc
+    if _pc is None:
+        api_key = os.getenv("PINECONE_API_KEY")
+        if not api_key:
+            raise ValueError("PINECONE_API_KEY not found in environment variables")
+        _pc = Pinecone(api_key=api_key)
+    return _pc
+
 
 class VectorStore:
     """
     Pinecone vector storage for each PDF.
-    
+
     pdf_id = namespace inside the Pinecone index.
     """
 
     def __init__(self, pdf_id: str):
         self.pdf_id = pdf_id
-        self.api_key = os.getenv("PINECONE_API_KEY")
         self.index_name = os.getenv("PINECONE_INDEX_NAME", "research-assistant")
 
-        if not self.api_key:
-            raise ValueError("PINECONE_API_KEY not found in environment variables")
+        self.pc = _get_pinecone_client()
 
-        self.pc = Pinecone(api_key=self.api_key)
-
-        # Create index if not exists
-        if self.index_name not in self.pc.list_indexes().names():
-            print(f"[VectorStore] Creating Pinecone index: {self.index_name}")
-            self.pc.create_index(
-                name=self.index_name,
-                dimension=384,             # matches all-MiniLM-L6-v2 output size
-                metric="cosine",
-                spec=ServerlessSpec(cloud="aws", region="us-east-1")
-            )
+        if self.index_name not in _verified_indexes:
+            if self.index_name not in self.pc.list_indexes().names():
+                print(f"[VectorStore] Creating Pinecone index: {self.index_name}")
+                self.pc.create_index(
+                    name=self.index_name,
+                    dimension=384,             # matches all-MiniLM-L6-v2 output size
+                    metric="cosine",
+                    spec=ServerlessSpec(cloud="aws", region="us-east-1")
+                )
+            _verified_indexes.add(self.index_name)
 
         self.index = self.pc.Index(self.index_name)
-        print(f"[VectorStore] Initialized index '{self.index_name}' for PDF namespace '{self.pdf_id}'")
 
     # ----------------------------------------------------------------------
     #                           ADD EMBEDDINGS

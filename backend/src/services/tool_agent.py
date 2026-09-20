@@ -12,24 +12,37 @@ load_dotenv()
 
 HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
 
+# Building HuggingFaceEndpoint + ChatHuggingFace (and re-binding tools) spins
+# up a new inference client on every call. It's stateless w.r.t. any single
+# conversation — conversation state lives in `chat_history`, which is
+# per-request already — so previously every chat message paid this setup
+# cost from scratch. Build it once per process and reuse it.
+_chat_model: ChatHuggingFace | None = None
+_tools = None
+_agent_with_tools = None
+
+
+def _get_chat_model():
+    global _chat_model, _tools, _agent_with_tools
+    if _chat_model is None:
+        hf_llm = HuggingFaceEndpoint(
+            repo_id="deepseek-ai/DeepSeek-V3.2-Exp",
+            task="text-generation",
+            huggingfacehub_api_token=HUGGINGFACE_API_KEY
+        )
+        _chat_model = ChatHuggingFace(llm=hf_llm)
+        _tools = get_research_tools()
+        _agent_with_tools = _chat_model.bind_tools(tools=_tools)
+    return _chat_model, _tools, _agent_with_tools
+
 
 class ToolAgent:
 
     def __init__(self):
         """Initialize LLM, tools, history and template"""
 
-        # ---- LLM ----
-        hf_llm = HuggingFaceEndpoint(
-            repo_id="deepseek-ai/DeepSeek-V3.2-Exp",
-            task="text-generation",
-            huggingfacehub_api_token=HUGGINGFACE_API_KEY
-        )
-        
-        self.chat_model = ChatHuggingFace(llm=hf_llm)
-
-        # ---- Tools ----
-        self.tools = get_research_tools()
-        self.agent = self.chat_model.bind_tools(tools=self.tools)
+        # ---- LLM + Tools (shared, cached) ----
+        self.chat_model, self.tools, self.agent = _get_chat_model()
 
         # ---- Memory ----
         self.chat_history = []

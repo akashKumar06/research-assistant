@@ -12,6 +12,7 @@ from fastapi import (
     Depends
 )
 from fastapi.responses import StreamingResponse
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -46,12 +47,21 @@ MAX_PDF_SIZE_BYTES = 20 * 1024 * 1024
 # -------------------------------------------------------
 
 @router.post("/upload")
-async def upload_pdf(
+def upload_pdf(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Uploads a PDF → Cloudinary → Splits → Embeds in Pinecone → Saves metadata"""
+    """
+    Uploads a PDF → Cloudinary → Splits → Embeds in Pinecone → Saves metadata.
+
+    Plain `def`, not `async def`: every step here (Cloudinary upload, PDF
+    parsing, chunking, embedding, Pinecone upsert, DB writes) is blocking.
+    Declaring it async while calling blocking code directly runs all of that
+    on the single event-loop thread, freezing every other in-flight request
+    for the whole duration of the upload. FastAPI automatically runs a sync
+    `def` route in a worker thread instead, so the event loop stays free.
+    """
 
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(400, "Only PDF files allowed")
@@ -59,8 +69,9 @@ async def upload_pdf(
     pdf_id = str(uuid.uuid4())  # also Pinecone namespace
 
     try:
-        # 1️⃣ Read file bytes
-        file_bytes = await file.read()
+        # 1️⃣ Read file bytes (sync .file.read(), not the async UploadFile.read()
+        # — this route is a plain `def` now, running in a worker thread)
+        file_bytes = file.file.read()
 
         if len(file_bytes) > MAX_PDF_SIZE_BYTES:
             size_mb = len(file_bytes) / (1024 * 1024)
@@ -157,8 +168,14 @@ async def chat_with_pdf(
     """Chat with a specific PDF using RAG (Pinecone + LLMModel)."""
 
     # 1️⃣ Ensure PDF belongs to user
-    pdf = (
-        db.query(PDF)
+    # This DB check and the RAG prompt build below are both blocking calls
+    # (sync SQLAlchemy query; llm.prompt() does a blocking Pinecone search +
+    # local embedding). Running them directly in this `async def` would
+    # block the event loop — and therefore every other concurrent request —
+    # until Pinecone/DB responds. Only the streaming loop needs to be async,
+    # so the blocking work is offloaded to a worker thread.
+    pdf = await run_in_threadpool(
+        lambda: db.query(PDF)
         .filter(PDF.id == pdf_id, PDF.user_id == user.id)
         .first()
     )
@@ -171,7 +188,7 @@ async def chat_with_pdf(
 
     try:
         # 3️⃣ Create prompt (RAG done internally)
-        messages = llm.prompt(query.question, pdf_id=pdf_id)
+        messages = await run_in_threadpool(llm.prompt, query.question, pdf_id=pdf_id)
         model = llm.model
 
         # 4️⃣ Streaming generator for deepseek

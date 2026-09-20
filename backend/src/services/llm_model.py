@@ -4,6 +4,27 @@ from langchain_community.chat_message_histories import ChatMessageHistory
 from src.services.vector_store import VectorStore
 import os
 
+# Same fix as ToolAgent: HuggingFaceEndpoint/ChatHuggingFace setup is
+# stateless and expensive, but was previously rebuilt on every single PDF
+# chat message. Build it once per process and reuse it across requests.
+_model: ChatHuggingFace | None = None
+
+
+def _get_model() -> ChatHuggingFace:
+    global _model
+    if _model is None:
+        llm = HuggingFaceEndpoint(
+            repo_id="deepseek-ai/DeepSeek-V3.2-Exp",
+            huggingfacehub_api_token=os.getenv("HUGGINGFACE_API_KEY"),
+            task="conversational",
+            max_new_tokens=1500,
+            temperature=0.7,
+            top_p=0.9,
+        )
+        _model = ChatHuggingFace(llm=llm)
+    return _model
+
+
 class LLMModel:
     """
     LLM model wrapper handling:
@@ -18,19 +39,8 @@ class LLMModel:
         pdf_id = ID of uploaded PDF (acts as vector namespace)
         """
         self.pdf_id = pdf_id
-        print(f"[LLMModel] Loaded for PDF: {pdf_id}")
 
-        # Load HuggingFace LLM model
-        llm = HuggingFaceEndpoint(
-            repo_id="deepseek-ai/DeepSeek-V3.2-Exp",
-            huggingfacehub_api_token=os.getenv("HUGGINGFACE_API_KEY"),
-            task="conversational",
-            max_new_tokens=1500,
-            temperature=0.7,
-            top_p=0.9,
-        )
-
-        self.model = ChatHuggingFace(llm=llm)
+        self.model = _get_model()
         self.chat_history = ChatMessageHistory()
 
 
