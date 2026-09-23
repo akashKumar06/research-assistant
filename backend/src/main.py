@@ -9,8 +9,14 @@ from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI(title="Research Paper Assistant")
 
 
-# Create all tables in Neon
-Base.metadata.create_all(bind=engine)
+@app.on_event("startup")
+def create_tables():
+    # Deferred from import time: this opens a real connection to Neon, whose
+    # free-tier compute auto-suspends after inactivity (see config/db.py).
+    # Running it at import time meant even tooling that just imports this
+    # module (tests, scripts) paid for a DB round-trip / cold-start retry.
+    Base.metadata.create_all(bind=engine)
+
 
 app.add_middleware(
     CORSMiddleware,

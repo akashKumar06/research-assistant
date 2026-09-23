@@ -1,4 +1,3 @@
-from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_community.chat_message_histories import ChatMessageHistory
 from src.services.vector_store import VectorStore
@@ -7,12 +6,19 @@ import os
 # Same fix as ToolAgent: HuggingFaceEndpoint/ChatHuggingFace setup is
 # stateless and expensive, but was previously rebuilt on every single PDF
 # chat message. Build it once per process and reuse it across requests.
-_model: ChatHuggingFace | None = None
+#
+# The import itself is deferred into this function too: langchain_huggingface
+# transitively pulls in transformers/torch, which took ~60s to import on this
+# machine. Importing it at module load meant every server boot paid that
+# cost up front, even for requests that never touch the LLM.
+_model = None
 
 
-def _get_model() -> ChatHuggingFace:
+def _get_model():
     global _model
     if _model is None:
+        from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
+
         llm = HuggingFaceEndpoint(
             repo_id="deepseek-ai/DeepSeek-V3.2-Exp",
             huggingfacehub_api_token=os.getenv("HUGGINGFACE_API_KEY"),

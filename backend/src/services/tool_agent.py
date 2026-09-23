@@ -1,5 +1,4 @@
 from dotenv import load_dotenv
-from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
@@ -17,7 +16,12 @@ HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
 # conversation — conversation state lives in `chat_history`, which is
 # per-request already — so previously every chat message paid this setup
 # cost from scratch. Build it once per process and reuse it.
-_chat_model: ChatHuggingFace | None = None
+#
+# The import is deferred into this function too: langchain_huggingface
+# transitively pulls in transformers/torch, which took ~60s to import on
+# this machine. Importing it at module load meant every server boot paid
+# that cost up front, even for requests that never touch this agent.
+_chat_model = None
 _tools = None
 _agent_with_tools = None
 
@@ -25,6 +29,8 @@ _agent_with_tools = None
 def _get_chat_model():
     global _chat_model, _tools, _agent_with_tools
     if _chat_model is None:
+        from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
+
         hf_llm = HuggingFaceEndpoint(
             repo_id="deepseek-ai/DeepSeek-V3.2-Exp",
             task="text-generation",
